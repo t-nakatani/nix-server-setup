@@ -66,8 +66,10 @@ pkgs.testers.runNixOSTest {
     server.wait_for_unit("docker.service")
     server.wait_for_unit("fail2ban.service")
     server.wait_for_unit("home-manager-testadmin.service")
-    client.wait_for_unit("network-online.target")
+    client.wait_for_unit("multi-user.target")
     server.wait_for_open_port(53122)
+    client.wait_until_succeeds("nc -z -w 2 server 53122")
+    client.wait_until_succeeds("nc -z -w 2 fd00:1::1 53122")
 
     with subtest("keys-only SSH, targeted sudo and shell tools"):
         client.succeed("ssh-keygen -q -t ed25519 -N \"\" -f /root/testkey")
@@ -76,14 +78,14 @@ pkgs.testers.runNixOSTest {
         server.succeed("printf '%s\\n' " + shlex.quote(pub) + " > /home/testadmin/.ssh/authorized_keys")
         server.succeed("chown testadmin:users /home/testadmin/.ssh/authorized_keys; chmod 600 /home/testadmin/.ssh/authorized_keys")
         ssh = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=5 -i /root/testkey -p 53122 "
-        client.succeed(ssh + "testadmin@server 'sudo -n true; docker info; docker compose version; uv --version'")
+        client.succeed(ssh + "testadmin@server 'sudo -n true && docker info && docker compose version && uv --version'")
         client.fail(ssh + "root@server true")
         client.fail("nc -z -w 2 server 22")
         client.succeed(ssh + "testadmin@fd00:1::1 true")
         server.succeed("sshd -T | grep -Fx 'passwordauthentication no'")
         server.succeed("sshd -T | grep -Fx 'kbdinteractiveauthentication no'")
         server.succeed("sshd -T | grep -Fx 'permitrootlogin no'")
-        server.succeed("su - testadmin -c \"zsh -ic 'whence -w peco-history-selection; bindkey ^R; whence -w _git'\"")
+        server.succeed("su - testadmin -c \"zsh -ic 'whence -w peco-history-selection && bindkey ^R && whence -w _git'\"")
         server.succeed("test $(readlink /etc/localtime) = $(readlink -f /etc/zoneinfo/Asia/Tokyo) || date +%Z | grep JST")
 
     with subtest("Docker publication remains inaccessible from outside"):
