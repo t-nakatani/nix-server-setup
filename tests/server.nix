@@ -96,7 +96,7 @@ pkgs.testers.runNixOSTest {
         client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail http://test-server:18080")
         client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail 'http://[fd00:1::1]:18080'")
         # A firewall reload must not remove the extra forwarding guard.
-        server.succeed("systemctl restart firewall.service")
+        server.succeed("systemctl reload nftables.service")
         client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail http://test-server:18080")
 
     with subtest("fail2ban reads actual SSH failures and enforces a ban"):
