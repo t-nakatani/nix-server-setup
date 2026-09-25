@@ -1,0 +1,31 @@
+name: Propose locked updates
+on:
+  schedule:
+    - cron: '0 21 * * 0'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: cachix/install-nix-action@b85815f71a6de0ddee80b8a80a98d43f4bcc66c7 # v31
+      - run: nix flake update
+      - run: nix flake check --no-build --all-systems
+      - run: nix build .#checks.x86_64-linux.system --no-link -L
+      - name: Integration test before proposing an update
+        run: |
+          sudo chmod 666 /dev/kvm
+          nix build .#checks.x86_64-linux.integration --no-link -L
+      - uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          branch: automation/flake-lock
+          title: 'Update locked NixOS and Home Manager dependencies'
+          commit-message: 'Update flake.lock within the selected stable release'
+          body: |
+            Updates flake.lock within the configured stable release. No release branch changes.
+            The x86_64 shared system and integration VM passed in the originating update workflow.
+            Review configured host builds (including ARM) before merging. A PR created with GITHUB_TOKEN does not automatically trigger other workflows; run Check NixOS manually on this branch.
+          add-paths: flake.lock

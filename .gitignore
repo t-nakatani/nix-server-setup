@@ -1,0 +1,7 @@
+/result
+/result-*
+.direnv/
+*.qcow2
+*.key
+*.pem
+.env

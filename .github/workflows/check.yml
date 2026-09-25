@@ -1,0 +1,37 @@
+name: Check NixOS
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            system: x86_64-linux
+          - runner: ubuntu-24.04-arm
+            system: aarch64-linux
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: cachix/install-nix-action@b85815f71a6de0ddee80b8a80a98d43f4bcc66c7 # v31
+      - run: nix flake check --no-build --all-systems
+      - name: Build shared system and configured hosts
+        run: |
+          nix build .#checks.${{ matrix.system }}.system --no-link -L
+          nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]' | while read -r host; do
+            system=$(nix eval --raw ".#nixosConfigurations.$host.pkgs.stdenv.hostPlatform.system")
+            if [ "$system" = '${{ matrix.system }}' ]; then
+              nix build ".#nixosConfigurations.$host.config.system.build.toplevel" --no-link -L
+            fi
+          done
+      - name: Integration VM (x86 runner provides KVM)
+        if: matrix.system == 'x86_64-linux'
+        run: |
+          sudo chmod 666 /dev/kvm
+          nix build .#checks.x86_64-linux.integration --no-link -L
