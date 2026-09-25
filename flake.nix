@@ -62,7 +62,15 @@
         }
       ) activeHosts;
 
-      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);
+      formatter = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        pkgs.writeShellScriptBin "format" ''
+          exec ${pkgs.nixfmt-tree}/bin/treefmt --tree-root . "$@"
+        ''
+      );
       checks = forAllSystems (
         system:
         let

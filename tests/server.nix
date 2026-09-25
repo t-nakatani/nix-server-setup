@@ -59,6 +59,7 @@ pkgs.testers.runNixOSTest {
   };
   testScript = ''
     import shlex
+    import time
 
     start_all()
     server.wait_for_unit("multi-user.target")
@@ -82,9 +83,9 @@ pkgs.testers.runNixOSTest {
         client.fail(ssh + "root@test-server true")
         client.fail("nc -z -w 2 test-server 22")
         client.succeed(ssh.replace("ssh -4", "ssh -6") + "testadmin@fd00:1::1 true")
-        server.succeed("sshd -T | grep -Fx 'passwordauthentication no'")
-        server.succeed("sshd -T | grep -Fx 'kbdinteractiveauthentication no'")
-        server.succeed("sshd -T | grep -Fx 'permitrootlogin no'")
+        server.succeed("sshd -T -f /etc/ssh/sshd_config | grep -Fx 'passwordauthentication no'")
+        server.succeed("sshd -T -f /etc/ssh/sshd_config | grep -Fx 'kbdinteractiveauthentication no'")
+        server.succeed("sshd -T -f /etc/ssh/sshd_config | grep -Fx 'permitrootlogin no'")
         server.succeed("su - testadmin -c \"zsh -ic 'whence -w peco-history-selection && bindkey ^R && whence -w _git'\"")
         server.succeed("test $(readlink /etc/localtime) = $(readlink -f /etc/zoneinfo/Asia/Tokyo) || date +%Z | grep JST")
 
@@ -104,6 +105,8 @@ pkgs.testers.runNixOSTest {
         assert server.succeed("fail2ban-client get sshd bantime").strip() == "3600"
         assert server.succeed("fail2ban-client get sshd findtime").strip() == "600"
         for _ in range(6):
+            # Let OpenSSH's short per-source penalty expire so fail2ban sees each failure.
+            time.sleep(6)
             client.execute(ssh + "does-not-exist@test-server true")
         server.wait_until_succeeds("fail2ban-client status sshd | grep -E 'Currently banned:[[:space:]]+[1-9]'")
         client.fail(ssh + "testadmin@test-server true")
