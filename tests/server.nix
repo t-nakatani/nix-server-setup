@@ -77,11 +77,11 @@ pkgs.testers.runNixOSTest {
         server.succeed("install -d -m 700 -o testadmin -g users /home/testadmin/.ssh")
         server.succeed("printf '%s\\n' " + shlex.quote(pub) + " > /home/testadmin/.ssh/authorized_keys")
         server.succeed("chown testadmin:users /home/testadmin/.ssh/authorized_keys; chmod 600 /home/testadmin/.ssh/authorized_keys")
-        ssh = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=5 -i /root/testkey -p 53122 "
+        ssh = "ssh -4 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=5 -i /root/testkey -p 53122 "
         client.succeed(ssh + "testadmin@test-server 'sudo -n true && docker info && docker compose version && uv --version'")
         client.fail(ssh + "root@test-server true")
         client.fail("nc -z -w 2 test-server 22")
-        client.succeed(ssh + "testadmin@fd00:1::1 true")
+        client.succeed(ssh.replace("ssh -4", "ssh -6") + "testadmin@fd00:1::1 true")
         server.succeed("sshd -T | grep -Fx 'passwordauthentication no'")
         server.succeed("sshd -T | grep -Fx 'kbdinteractiveauthentication no'")
         server.succeed("sshd -T | grep -Fx 'permitrootlogin no'")
