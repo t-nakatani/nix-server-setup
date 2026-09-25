@@ -68,8 +68,8 @@ pkgs.testers.runNixOSTest {
     server.wait_for_unit("home-manager-testadmin.service")
     client.wait_for_unit("multi-user.target")
     server.wait_for_open_port(53122)
-    client.wait_until_succeeds("nc -z -w 2 server 53122")
-    client.wait_until_succeeds("nc -z -w 2 fd00:1::1 53122")
+    client.wait_until_succeeds("nc -z -w 2 test-server 53122", timeout=60)
+    client.wait_until_succeeds("nc -z -w 2 fd00:1::1 53122", timeout=60)
 
     with subtest("keys-only SSH, targeted sudo and shell tools"):
         client.succeed("ssh-keygen -q -t ed25519 -N \"\" -f /root/testkey")
@@ -78,9 +78,9 @@ pkgs.testers.runNixOSTest {
         server.succeed("printf '%s\\n' " + shlex.quote(pub) + " > /home/testadmin/.ssh/authorized_keys")
         server.succeed("chown testadmin:users /home/testadmin/.ssh/authorized_keys; chmod 600 /home/testadmin/.ssh/authorized_keys")
         ssh = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=5 -i /root/testkey -p 53122 "
-        client.succeed(ssh + "testadmin@server 'sudo -n true && docker info && docker compose version && uv --version'")
-        client.fail(ssh + "root@server true")
-        client.fail("nc -z -w 2 server 22")
+        client.succeed(ssh + "testadmin@test-server 'sudo -n true && docker info && docker compose version && uv --version'")
+        client.fail(ssh + "root@test-server true")
+        client.fail("nc -z -w 2 test-server 22")
         client.succeed(ssh + "testadmin@fd00:1::1 true")
         server.succeed("sshd -T | grep -Fx 'passwordauthentication no'")
         server.succeed("sshd -T | grep -Fx 'kbdinteractiveauthentication no'")
@@ -92,11 +92,11 @@ pkgs.testers.runNixOSTest {
         server.succeed("docker load < ${image}")
         server.succeed("docker run -d --name web -p 0.0.0.0:18080:8080 -p '[::]:18080:8080' server-test:local")
         server.wait_until_succeeds("curl --fail http://127.0.0.1:18080 | grep nixos-server-ok")
-        client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail http://server:18080")
+        client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail http://test-server:18080")
         client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail 'http://[fd00:1::1]:18080'")
         # A firewall reload must not remove the extra forwarding guard.
         server.succeed("systemctl restart firewall.service")
-        client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail http://server:18080")
+        client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail http://test-server:18080")
 
     with subtest("fail2ban reads actual SSH failures and enforces a ban"):
         server.wait_until_succeeds("fail2ban-client status sshd")
@@ -104,8 +104,8 @@ pkgs.testers.runNixOSTest {
         assert server.succeed("fail2ban-client get sshd bantime").strip() == "3600"
         assert server.succeed("fail2ban-client get sshd findtime").strip() == "600"
         for _ in range(6):
-            client.execute(ssh + "does-not-exist@server true")
+            client.execute(ssh + "does-not-exist@test-server true")
         server.wait_until_succeeds("fail2ban-client status sshd | grep -E 'Currently banned:[[:space:]]+[1-9]'")
-        client.fail(ssh + "testadmin@server true")
+        client.fail(ssh + "testadmin@test-server true")
   '';
 }
