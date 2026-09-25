@@ -83,16 +83,16 @@ pkgs.testers.runNixOSTest {
         client.fail(ssh + "root@test-server true")
         client.fail("nc -z -w 2 test-server 22")
         client.succeed(ssh.replace("ssh -4", "ssh -6") + "testadmin@fd00:1::1 true")
-        server.succeed("sshd -T -f /etc/ssh/sshd_config | grep -Fx 'passwordauthentication no'")
-        server.succeed("sshd -T -f /etc/ssh/sshd_config | grep -Fx 'kbdinteractiveauthentication no'")
-        server.succeed("sshd -T -f /etc/ssh/sshd_config | grep -Fx 'permitrootlogin no'")
+        server.succeed("sshd -T -f /etc/ssh/sshd_config | grep -Fxi 'passwordauthentication no'")
+        server.succeed("sshd -T -f /etc/ssh/sshd_config | grep -Fxi 'kbdinteractiveauthentication no'")
+        server.succeed("sshd -T -f /etc/ssh/sshd_config | grep -Fxi 'permitrootlogin no'")
         server.succeed("su - testadmin -c \"zsh -ic 'whence -w peco-history-selection && bindkey ^R && whence -w _git'\"")
         server.succeed("test $(readlink /etc/localtime) = $(readlink -f /etc/zoneinfo/Asia/Tokyo) || date +%Z | grep JST")
 
     with subtest("Docker publication remains inaccessible from outside"):
         server.succeed("docker load < ${image}")
         server.succeed("docker run -d --name web -p 0.0.0.0:18080:8080 -p '[::]:18080:8080' server-test:local")
-        server.wait_until_succeeds("curl --fail http://127.0.0.1:18080 | grep nixos-server-ok")
+        server.wait_until_succeeds("curl --fail http://127.0.0.1:18080 | grep nixos-server-ok", timeout=60)
         client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail http://test-server:18080")
         client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail 'http://[fd00:1::1]:18080'")
         # A firewall reload must not remove the extra forwarding guard.
@@ -100,7 +100,7 @@ pkgs.testers.runNixOSTest {
         client.fail("curl --noproxy '*' --connect-timeout 2 --max-time 3 --fail http://test-server:18080")
 
     with subtest("fail2ban reads actual SSH failures and enforces a ban"):
-        server.wait_until_succeeds("fail2ban-client status sshd")
+        server.wait_until_succeeds("fail2ban-client status sshd", timeout=60)
         assert server.succeed("fail2ban-client get sshd maxretry").strip() == "5"
         assert server.succeed("fail2ban-client get sshd bantime").strip() == "3600"
         assert server.succeed("fail2ban-client get sshd findtime").strip() == "600"
@@ -108,7 +108,7 @@ pkgs.testers.runNixOSTest {
             # Let OpenSSH's short per-source penalty expire so fail2ban sees each failure.
             time.sleep(6)
             client.execute(ssh + "does-not-exist@test-server true")
-        server.wait_until_succeeds("fail2ban-client status sshd | grep -E 'Currently banned:[[:space:]]+[1-9]'")
+        server.wait_until_succeeds("fail2ban-client status sshd | grep -E 'Currently banned:[[:space:]]+[1-9]'", timeout=60)
         client.fail(ssh + "testadmin@test-server true")
   '';
 }
